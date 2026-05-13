@@ -52,6 +52,8 @@ services:
     volumes:
       # Hot-reload: bind-mount source over the image's /app/src
       - ./backend/src:/app/src:cached
+      # Step 2+: target repos for indexing (read-only)
+      - ./repos:/app/repos:ro
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)\""]
       interval: 5s

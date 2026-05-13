@@ -9,6 +9,10 @@ dependencies = [
     "pydantic-settings>=2.7.0",
     "httpx>=0.27.0",
     "tenacity>=9.0.0",
+    # Step 2 — tree-sitter chunker
+    "tree-sitter>=0.23.0",
+    "tree-sitter-python>=0.25.0",
+    "click>=8.1.0",
 ]
 
 [build-system]
