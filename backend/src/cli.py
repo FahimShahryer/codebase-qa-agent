@@ -214,5 +214,98 @@ def list_tenants_cmd() -> None:
             click.echo(f"  {t}")
 
 
+@cli.command("embed-sample")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--limit", default=20, show_default=True, type=int)
+def embed_sample_cmd(repo_path: Path, limit: int) -> None:
+    """Embed + summarize N sample chunks. Validates Step 4 factories + cache.
+
+    Run twice to verify the second pass is ~100% cache hits.
+    """
+    import time
+    from src.cache import cache_stats
+    from src.embed import Embedder
+    from src.summarize import Summarizer
+
+    # Balanced sample across chunk types
+    by_type: dict[str, list[Chunk]] = {"file": [], "class": [], "function": [], "method": []}
+    target_per_type = max(1, limit // 4)
+    for c in extract_from_repo(repo_path):
+        if c.chunk_type in by_type and len(by_type[c.chunk_type]) < target_per_type * 2:
+            by_type[c.chunk_type].append(c)
+        if sum(len(v) for v in by_type.values()) >= limit * 2:
+            break
+    selected: list[Chunk] = []
+    for t in ("file", "class", "function", "method"):
+        selected.extend(by_type[t][:target_per_type])
+    selected = selected[:limit]
+    if not selected:
+        click.secho("No chunks extracted — is the repo path correct?", fg="red")
+        raise click.Abort()
+
+    click.secho(f"== Selected {len(selected)} chunks ==", fg="green", bold=True)
+    by_type_count: dict[str, int] = {}
+    for c in selected:
+        by_type_count[c.chunk_type] = by_type_count.get(c.chunk_type, 0) + 1
+    for t, n in sorted(by_type_count.items()):
+        click.echo(f"  {t:<10s}: {n}")
+
+    # ── Embedding ──────────────────────────────────────────────
+    embedder = Embedder()
+    click.secho(
+        f"\n== Embedding: provider={embedder.provider} model={embedder.model} ==",
+        fg="green", bold=True,
+    )
+    # The embedding input mirrors what the indexing pipeline will use
+    # (Strategy C: symbol_path + docstring + code preview). Full Strategy
+    # C concatenation lands when the indexer wires in Step 5.
+    texts = [
+        f"{c.symbol_path}\n{c.docstring or ''}\n{c.code[:1500]}"
+        for c in selected
+    ]
+    t0 = time.time()
+    vectors, e_stats = embedder.embed(texts)
+    elapsed = time.time() - t0
+    click.echo(
+        f"  total={e_stats['total']} hits={e_stats['hits']} "
+        f"misses={e_stats['misses']} hit_rate={e_stats['hit_rate']*100:.0f}% "
+        f"dim={e_stats['dimension']} took={elapsed:.1f}s"
+    )
+
+    # ── Summarization ──────────────────────────────────────────
+    summarizer = Summarizer()
+    click.secho(
+        f"\n== Summary: provider={summarizer.provider} model={summarizer.model} ==",
+        fg="green", bold=True,
+    )
+    t0 = time.time()
+    summaries: list[tuple[Chunk, str, bool]] = []
+    hits = 0
+    for c in selected:
+        s, hit = summarizer.summarize(c)
+        summaries.append((c, s, hit))
+        if hit:
+            hits += 1
+    elapsed = time.time() - t0
+    click.echo(
+        f"  total={len(selected)} hits={hits} misses={len(selected)-hits} "
+        f"hit_rate={hits/len(selected)*100:.0f}% took={elapsed:.1f}s"
+    )
+
+    # ── Sample summaries (eyeball distinctness) ───────────────
+    click.secho("\n== Sample summaries (5) ==", fg="green", bold=True)
+    for c, s, _ in summaries[:5]:
+        click.secho(f"[{c.chunk_type}] {c.symbol_path}", fg="cyan", bold=True)
+        click.echo(f"  {s}\n")
+
+    # ── Cache totals ──────────────────────────────────────────
+    stats = cache_stats()
+    click.secho("== Cache totals ==", fg="green", bold=True)
+    click.echo(f"  embeddings: {stats['embeddings']['total']} "
+               f"(by provider/model: {stats['embeddings']['by_provider_model']})")
+    click.echo(f"  summaries:  {stats['summaries']['total']} "
+               f"(by provider/model: {stats['summaries']['by_provider_model']})")
+
+
 if __name__ == "__main__":
     cli()

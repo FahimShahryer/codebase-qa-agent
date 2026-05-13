@@ -16,6 +16,11 @@ dependencies = [
     # Step 3 — Weaviate v4 client
     "weaviate-client>=4.9.0",
     "packaging>=24.0",   # transitive of weaviate-client; not in python:slim
+    # Step 4 — LLM providers (embedding + summary) with cache
+    "langchain-openai>=0.2.0",
+    "langchain-ollama>=0.2.0",
+    "langchain-huggingface>=0.1.0",  # wraps sentence-transformers (heavy: ~1.5GB)
+    "sentence-transformers>=3.0.0",
 ]
 
 [build-system]

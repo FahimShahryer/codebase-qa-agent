@@ -54,6 +54,10 @@ services:
       - ./backend/src:/app/src:cached
       # Step 2+: target repos for indexing (read-only)
       - ./repos:/app/repos:ro
+      # Step 4+: persistent cache for embeddings + summaries (content-hash keyed)
+      - ./cache:/app/cache
+      # Step 4+: HuggingFace model cache (avoid re-downloading bge models)
+      - hf_cache:/root/.cache/huggingface
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)\""]
       interval: 5s
@@ -84,3 +88,4 @@ services:
 volumes:
   weaviate_data:
   ollama_data:
+  hf_cache:
