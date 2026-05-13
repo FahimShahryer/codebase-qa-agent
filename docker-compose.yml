@@ -1,0 +1,84 @@
+services:
+  weaviate:
+    # verified: /weaviate/docs (May 2026) — BYO-vectors, no modules
+    image: cr.weaviate.io/semitechnologies/weaviate:1.37.0
+    container_name: ajentica-weaviate
+    ports:
+      - "8080:8080"
+      - "50051:50051"
+    restart: unless-stopped
+    environment:
+      QUERY_DEFAULTS_LIMIT: 25
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: "/var/lib/weaviate"
+      DEFAULT_VECTORIZER_MODULE: "none"
+      ENABLE_MODULES: ""
+      CLUSTER_HOSTNAME: "node1"
+    volumes:
+      - weaviate_data:/var/lib/weaviate
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:8080/v1/.well-known/ready || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ajentica-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    profiles:
+      - local-llm
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ajentica-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      WEAVIATE_URL: http://weaviate:8080
+      OLLAMA_BASE_URL: http://ollama:11434
+    depends_on:
+      weaviate:
+        condition: service_healthy
+    volumes:
+      # Hot-reload: bind-mount source over the image's /app/src
+      - ./backend/src:/app/src:cached
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ajentica-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8000
+    volumes:
+      # Hot-reload: bind-mount source, but anonymous-volume node_modules + .next
+      # so the container's installs and build outputs aren't shadowed by the host.
+      - ./frontend:/app:cached
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  weaviate_data:
+  ollama_data:
