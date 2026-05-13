@@ -175,7 +175,8 @@ def insert_test_cmd(repo_path: Path, tenant: str, limit: int) -> None:
 def query(query_text: str, tenant: str, limit: int) -> None:
     """BM25 search against a tenant — used in Step 3 to validate the schema.
 
-    Hybrid (vector + BM25) lands in Step 6 once embeddings exist.
+    For the full 7-stage retrieval pipeline (hybrid + rerank + expand), use
+    the `search` command (added in Step 6).
     """
     from src.store import bm25_search, weaviate_client
     with weaviate_client() as client:
@@ -189,6 +190,88 @@ def query(query_text: str, tenant: str, limit: int) -> None:
                 f"  [{i}] score={h['score']:.3f}  [{h['chunk_type']}] "
                 f"{h['symbol_path']}  ({h['file_path']}:{h['start_line']}-{h['end_line']})"
             )
+
+
+@cli.command()
+@click.argument("query_text")
+@click.option("--tenant", default=None, help="Tenant (default: REPO_NAME from .env)")
+@click.option("--limit", default=5, show_default=True, type=int)
+@click.option("--no-expand", is_flag=True, help="Skip context expansion stage.")
+@click.option("--no-rerank", is_flag=True,
+              help="Return raw hybrid order without cross-encoder rerank.")
+def search(
+    query_text: str,
+    tenant: str | None,
+    limit: int,
+    no_expand: bool,
+    no_rerank: bool,
+) -> None:
+    """Run the full 7-stage retrieval pipeline (Step 6)."""
+    from src.retrieve import detect_alpha, search_code, should_answer
+
+    alpha = detect_alpha(query_text)
+    click.secho(f"== Query: {query_text!r} ==", fg="green", bold=True)
+    click.echo(f"  alpha:  {alpha} ({'BM25-heavy' if alpha < 0.5 else 'vector-heavy'})")
+    if no_rerank:
+        click.echo("  rerank: SKIPPED")
+    if no_expand:
+        click.echo("  expand: SKIPPED")
+
+    # We re-implement here so flags are wired explicitly
+    from src.embed import Embedder
+    from src.retrieve import expand_context, hybrid_search, rerank
+    from src.store import weaviate_client
+
+    tenant = tenant or click.get_current_context().obj or None
+    if tenant is None:
+        from src.config import settings
+        tenant = settings.REPO_NAME
+
+    embedder = Embedder()
+    vectors, _ = embedder.embed([query_text])
+    query_vec = vectors[0]
+
+    with weaviate_client() as client:
+        candidates = hybrid_search(
+            client, tenant=tenant, query=query_text,
+            vector=query_vec, alpha=alpha, limit=20,
+        )
+        if not no_rerank:
+            candidates = rerank(query_text, candidates, top_k=limit)
+        else:
+            candidates = candidates[:limit]
+        if not no_expand:
+            candidates = expand_context(client, tenant=tenant, chunks=candidates)
+
+    if not candidates:
+        click.secho("  No hits", fg="yellow")
+        return
+
+    # Refusal gate signal
+    top_search = next((c for c in candidates if c.source == "search"), None)
+    if top_search and top_search.rerank_score is not None:
+        verdict = "ANSWER" if top_search.rerank_score >= 0.3 else "REFUSE"
+        col = "green" if verdict == "ANSWER" else "red"
+        click.secho(
+            f"  refusal-gate: {verdict}  (top rerank={top_search.rerank_score:.3f}, threshold=0.3)",
+            fg=col,
+        )
+
+    click.echo("")
+    for i, c in enumerate(candidates, 1):
+        score_str = (
+            f"rerank={c.rerank_score:.3f}" if c.rerank_score is not None
+            else f"hybrid={c.hybrid_score:.3f}"
+        )
+        src_tag = f"[{c.source.upper():>6s}]"
+        col = "cyan" if c.source == "search" else "magenta"
+        click.secho(
+            f"  [{i}] {src_tag} {score_str:<18s} {c.chunk_type:<9s} {c.symbol_path}",
+            fg=col, bold=(c.source == "search"),
+        )
+        click.echo(f"       {c.file_path}:{c.start_line}-{c.end_line}")
+        if c.summary:
+            click.echo(f"       {c.summary[:140]}{'...' if len(c.summary) > 140 else ''}")
 
 
 @cli.command()
