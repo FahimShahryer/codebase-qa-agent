@@ -1,6 +1,7 @@
 """Dev CLI — exposes pipeline stages without going through HTTP."""
 from __future__ import annotations
 
+import itertools
 import json
 from pathlib import Path
 
@@ -99,6 +100,118 @@ def _pretty_print(c: Chunk) -> None:
     if preview:
         click.echo(f"  code:    {preview[:180]}{'...' if len(preview) > 180 else ''}")
     click.echo()
+
+
+@cli.command("init-schema")
+@click.option("--drop", is_flag=True, help="Delete and recreate the collection.")
+def init_schema_cmd(drop: bool) -> None:
+    """Create the multi-tenant CodeChunk_v1 collection in Weaviate."""
+    from src.store import COLLECTION_NAME, init_schema, weaviate_client
+    with weaviate_client() as client:
+        created = init_schema(client, drop=drop)
+        if created:
+            click.secho(f"✓ Created collection {COLLECTION_NAME}", fg="green")
+        else:
+            click.secho(f"  Collection {COLLECTION_NAME} already exists "
+                        f"(use --drop to recreate)", fg="yellow")
+
+
+@cli.command("drop-schema")
+@click.confirmation_option(prompt="Delete the CodeChunk_v1 collection?")
+def drop_schema_cmd() -> None:
+    """Delete the CodeChunk_v1 collection (irreversible)."""
+    from src.store import COLLECTION_NAME, drop_schema, weaviate_client
+    with weaviate_client() as client:
+        if drop_schema(client):
+            click.secho(f"✓ Deleted collection {COLLECTION_NAME}", fg="green")
+        else:
+            click.secho(f"  Collection {COLLECTION_NAME} did not exist", fg="yellow")
+
+
+@cli.command("insert-test")
+@click.argument("repo_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
+@click.option("--tenant", default="test", show_default=True, help="Tenant name to insert into.")
+@click.option("--limit", default=10, show_default=True, type=int, help="Chunks to insert.")
+def insert_test_cmd(repo_path: Path, tenant: str, limit: int) -> None:
+    """Insert N chunks from a repo into a tenant (no vectors yet — Step 3 only)."""
+    from src.store import ensure_tenant, insert_chunks, weaviate_client
+
+    # Take a curated mix: 2 file + 3 class + 5 function chunks (ensures
+    # tokenization tests cover all types).
+    by_type: dict[str, list[Chunk]] = {"file": [], "class": [], "function": [], "method": []}
+    for c in extract_from_repo(repo_path):
+        by_type[c.chunk_type].append(c)
+        if all(len(by_type[t]) >= 5 for t in ("file", "class", "function", "method")):
+            break
+
+    selected: list[Chunk] = (
+        by_type["file"][:2] + by_type["class"][:3]
+        + by_type["function"][:3] + by_type["method"][:2]
+    )[:limit]
+
+    if not selected:
+        click.secho("✗ No chunks extracted — is the repo path correct?", fg="red")
+        raise click.Abort()
+
+    with weaviate_client() as client:
+        created = ensure_tenant(client, tenant)
+        if created:
+            click.secho(f"  Created tenant '{tenant}'", fg="cyan")
+        result = insert_chunks(client, selected, repo_name=tenant)
+        click.secho(
+            f"✓ Inserted {result['inserted']} chunks into tenant '{tenant}' "
+            f"({result['errors']} errors)",
+            fg="green" if result["errors"] == 0 else "yellow",
+        )
+        if result["first_errors"]:
+            for e in result["first_errors"]:
+                click.echo(f"  err [{e['idx']}]: {e['msg']}")
+
+
+@cli.command()
+@click.argument("query_text")
+@click.option("--tenant", default="test", show_default=True)
+@click.option("--limit", default=5, show_default=True, type=int)
+def query(query_text: str, tenant: str, limit: int) -> None:
+    """BM25 search against a tenant — used in Step 3 to validate the schema.
+
+    Hybrid (vector + BM25) lands in Step 6 once embeddings exist.
+    """
+    from src.store import bm25_search, weaviate_client
+    with weaviate_client() as client:
+        hits = bm25_search(client, tenant, query_text, limit=limit)
+        if not hits:
+            click.secho(f"  No hits in tenant '{tenant}'", fg="yellow")
+            return
+        click.secho(f"== Top {len(hits)} hits for '{query_text}' ==", fg="green", bold=True)
+        for i, h in enumerate(hits, 1):
+            click.echo(
+                f"  [{i}] score={h['score']:.3f}  [{h['chunk_type']}] "
+                f"{h['symbol_path']}  ({h['file_path']}:{h['start_line']}-{h['end_line']})"
+            )
+
+
+@cli.command()
+@click.argument("tenant")
+def count(tenant: str) -> None:
+    """Print the chunk count for a tenant."""
+    from src.store import count_chunks, weaviate_client
+    with weaviate_client() as client:
+        n = count_chunks(client, tenant)
+        click.echo(f"tenant '{tenant}': {n} chunks")
+
+
+@cli.command("list-tenants")
+def list_tenants_cmd() -> None:
+    """List all tenants in the collection."""
+    from src.store import list_tenants, weaviate_client
+    with weaviate_client() as client:
+        tenants = list_tenants(client)
+        if not tenants:
+            click.echo("(no tenants)")
+            return
+        for t in tenants:
+            click.echo(f"  {t}")
 
 
 if __name__ == "__main__":

@@ -13,6 +13,9 @@ dependencies = [
     "tree-sitter>=0.23.0",
     "tree-sitter-python>=0.25.0",
     "click>=8.1.0",
+    # Step 3 — Weaviate v4 client
+    "weaviate-client>=4.9.0",
+    "packaging>=24.0",   # transitive of weaviate-client; not in python:slim
 ]
 
 [build-system]
