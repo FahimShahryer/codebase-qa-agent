@@ -1,0 +1,66 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+.python-version
+
+# === Node / Next.js ===
+node_modules/
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+.pnpm-store/
+
+# === Secrets & env ===
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# === Runtime data (re-created per environment, never committed) ===
+repos/
+memory/
+cache/
+weaviate_data/
+ollama_data/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# === Indexes: tarballs are committed; working dirs are not ===
+indexes/extracted/
+indexes/temp/
+
+# === OS / IDE ===
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# === Logs ===
+*.log
+logs/
+
+# === Claude Code memory directory (local; not for distribution) ===
+.claude/
+
+# === Internal planning docs (kept local, never committed) ===
+assignment.md
+approach1.md
+approach2.md
+plan.md
+notes.md
