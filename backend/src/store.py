@@ -168,11 +168,22 @@ def list_tenants(client: weaviate.WeaviateClient) -> list[str]:
 
 # ── Chunk → properties mapping ───────────────────────────────────────
 def chunk_uuid(repo: str, chunk: Chunk) -> str:
-    """Deterministic UUID5 by (repo, file_path, symbol_path). Stable across
-    re-indexing — same symbol → same UUID even if code body changes
-    (content_hash is a separate property for change detection)."""
+    """Deterministic UUID5 by (repo, file_path, symbol_path, start_line).
+
+    Stable across re-indexing — same symbol at same line → same UUID even
+    if code body changes (content_hash is a separate property for change
+    detection).
+
+    start_line is included to disambiguate Python patterns where multiple
+    physically-distinct definitions share a symbol_path:
+      - @overload type-stub variants
+      - @property getter + @x.setter (same name twice)
+      - @app.template_filter / @app.template_test stacked registrations
+    Adding a line above one of these definitions shifts its UUID; that's
+    acceptable since the embedding + summary caches are content-hash keyed
+    so re-indexing stays cheap (only Weaviate gets a new row)."""
     sp = chunk.symbol_path or chunk.file_path
-    return str(uuid.uuid5(NAMESPACE, f"{repo}::{chunk.file_path}::{sp}"))
+    return str(uuid.uuid5(NAMESPACE, f"{repo}::{chunk.file_path}::{sp}::{chunk.start_line}"))
 
 
 def _tokenize_identifier(name: str) -> str:

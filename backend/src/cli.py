@@ -214,6 +214,34 @@ def list_tenants_cmd() -> None:
             click.echo(f"  {t}")
 
 
+@cli.command()
+@click.option("--repo", "repo_name", required=True, help="Tenant name (typically the repo dir name).")
+@click.option("--repo-path", default=None,
+              help="Override repo path (default: /app/repos/{repo}).")
+@click.option("--drop", is_flag=True, help="Delete collection first (wipes ALL tenants).")
+@click.option("--limit", default=None, type=int, help="Cap chunks (dev only).")
+def index(repo_name: str, repo_path: str | None, drop: bool, limit: int | None) -> None:
+    """Run the full indexing pipeline on a repo (Step 5)."""
+    from src.index import index_repo
+    path = Path(repo_path or f"/app/repos/{repo_name}")
+    if not path.exists():
+        click.secho(f"Path does not exist: {path}", fg="red")
+        raise click.Abort()
+
+    stats = index_repo(path, tenant=repo_name, drop=drop, limit=limit)
+
+    click.secho("\n== Indexing complete ==", fg="green", bold=True)
+    click.echo(f"  tenant:           {stats['tenant']}")
+    click.echo(f"  discovered:       {stats['discovered']} chunks")
+    click.echo(f"  inserted:         {stats['inserted']}")
+    click.echo(f"  errors:           {stats.get('errors', 0)}")
+    click.echo(f"  final count:      {stats['final_count']}")
+    click.echo(f"  by type:          {stats['by_type']}")
+    click.echo(f"  embed cache hit:  {stats['embed_hit_rate']*100:.1f}%")
+    click.echo(f"  summary cache:    {stats['summary_hit_rate']*100:.1f}%")
+    click.echo(f"  elapsed:          {stats['elapsed_seconds']}s")
+
+
 @cli.command("embed-sample")
 @click.argument("repo_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--limit", default=20, show_default=True, type=int)

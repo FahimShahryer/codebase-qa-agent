@@ -21,6 +21,8 @@ dependencies = [
     "langchain-ollama>=0.2.0",
     "langchain-huggingface>=0.1.0",  # wraps sentence-transformers (heavy: ~1.5GB)
     "sentence-transformers>=3.0.0",
+    # Step 5 — full indexing pipeline progress bars
+    "tqdm>=4.66.0",
 ]
 
 [build-system]
