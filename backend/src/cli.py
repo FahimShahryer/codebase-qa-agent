@@ -325,6 +325,96 @@ def index(repo_name: str, repo_path: str | None, drop: bool, limit: int | None) 
     click.echo(f"  elapsed:          {stats['elapsed_seconds']}s")
 
 
+@cli.command()
+@click.option("--session-id", default=None, help="Thread id (default: random uuid).")
+@click.option("--query", "one_shot", default=None,
+              help="Run a single query and exit (non-interactive).")
+@click.option("--repo", default=None, help="Repo / tenant override.")
+def chat(session_id: str | None, one_shot: str | None, repo: str | None) -> None:
+    """Interactive (or one-shot) chat with the agent (Step 7)."""
+    import asyncio
+    import uuid as uuid_mod
+
+    sid = session_id or str(uuid_mod.uuid4())
+    if repo:
+        # Stash override for the agent layer (tools read settings.REPO_NAME)
+        from src.config import settings as _settings
+        _settings.REPO_NAME = repo
+
+    if one_shot is not None:
+        asyncio.run(_run_one_shot(sid, one_shot))
+    else:
+        asyncio.run(_run_interactive(sid))
+
+
+def _render_event(event: dict) -> None:
+    """Translate a LangGraph stream_mode='updates' event into pretty CLI output."""
+    for node_name, payload in event.items():
+        if not isinstance(payload, dict):
+            continue
+        msgs = payload.get("messages", [])
+        for msg in msgs:
+            cls = msg.__class__.__name__
+            if cls == "AIMessage" and getattr(msg, "tool_calls", None):
+                for tc in msg.tool_calls:
+                    args = ", ".join(f"{k}={v!r}" for k, v in (tc.get("args") or {}).items())
+                    click.secho(f"  🔧 {tc['name']}({args})", fg="yellow")
+            elif cls == "ToolMessage":
+                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                preview = content.replace("\n", " ")[:140]
+                click.secho(f"     ← {preview}{'…' if len(content) > 140 else ''}",
+                            fg="white", dim=True)
+            elif cls == "AIMessage" and getattr(msg, "content", None):
+                click.echo("")
+                click.secho("Assistant:", fg="green", bold=True)
+                click.echo(msg.content)
+
+
+async def _run_one_shot(session_id: str, query_text: str) -> None:
+    from src.agent import build_agent
+    from src.config import settings
+    click.secho(f"== Session: {session_id} | Tenant: {settings.REPO_NAME} ==", fg="cyan")
+    click.echo(f"User: {query_text}\n")
+    async with build_agent() as agent:
+        config = {"configurable": {"thread_id": session_id}}
+        async for ev in agent.astream(
+            {"messages": [{"role": "user", "content": query_text}]},
+            config,
+            stream_mode="updates",
+        ):
+            _render_event(ev)
+
+
+async def _run_interactive(session_id: str) -> None:
+    from src.agent import build_agent
+    from src.config import settings
+    click.secho(f"== Session: {session_id} | Tenant: {settings.REPO_NAME} ==", fg="cyan")
+    click.echo("Type your question. Ctrl-D or 'quit' to exit.\n")
+
+    async with build_agent() as agent:
+        config = {"configurable": {"thread_id": session_id}}
+        while True:
+            try:
+                user_input = input("> ").strip()
+            except (EOFError, KeyboardInterrupt):
+                click.echo("\nbye.")
+                return
+            if not user_input:
+                continue
+            if user_input.lower() in ("quit", "exit", ":q"):
+                return
+            try:
+                async for ev in agent.astream(
+                    {"messages": [{"role": "user", "content": user_input}]},
+                    config,
+                    stream_mode="updates",
+                ):
+                    _render_event(ev)
+                click.echo("")
+            except Exception as e:  # don't crash the loop on a single bad turn
+                click.secho(f"Error: {e}", fg="red")
+
+
 @cli.command("embed-sample")
 @click.argument("repo_path", type=click.Path(exists=True, file_okay=False, path_type=Path))
 @click.option("--limit", default=20, show_default=True, type=int)

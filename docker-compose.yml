@@ -58,6 +58,8 @@ services:
       - ./cache:/app/cache
       # Step 4+: HuggingFace model cache (avoid re-downloading bge models)
       - hf_cache:/root/.cache/huggingface
+      # Step 7+: LangGraph AsyncSqliteSaver thread state (chat history)
+      - ./memory:/app/memory
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request, sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/health').status == 200 else 1)\""]
       interval: 5s

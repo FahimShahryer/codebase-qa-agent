@@ -23,6 +23,14 @@ dependencies = [
     "sentence-transformers>=3.0.0",
     # Step 5 — full indexing pipeline progress bars
     "tqdm>=4.66.0",
+    # Step 7 — LangGraph agent + tools + sqlite checkpointer
+    "langgraph>=0.6.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",
+    "langchain-core>=0.3.0",
+    "aiosqlite>=0.20.0",
+    # Step 7b — LangChain V1 umbrella for canonical create_agent +
+    # init_chat_model. Replaces deprecated langgraph.prebuilt.create_react_agent.
+    "langchain>=1.0.0",
 ]
 
 [build-system]

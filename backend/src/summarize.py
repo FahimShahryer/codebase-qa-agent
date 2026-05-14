@@ -1,9 +1,9 @@
 """LLM-based chunk summary generation with content-hash cache.
 
 verified: /websites/langchain_oss_python_langchain (May 2026)
-- from langchain_openai import ChatOpenAI
-- from langchain_ollama import ChatOllama
-Both expose .invoke(prompt) → AIMessage with .content attribute.
+- `from langchain.chat_models import init_chat_model` is the canonical V1
+  initialiser; accepts "provider:model" strings and forwards extra kwargs
+  (api_key, base_url, temperature) to the underlying provider class.
 
 Summaries are deliberately constrained in style (verb-first, factual, no
 marketing) so they cluster well in embedding space and serve as good
@@ -11,6 +11,7 @@ search targets in their own right (per approach1.md Step 3).
 """
 from __future__ import annotations
 
+from langchain.chat_models import init_chat_model
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from src.cache import content_hash, get_summary, set_summary
@@ -31,25 +32,16 @@ _CODE_PREVIEW_CHARS = 2000
 
 
 def _make_llm():
-    p = settings.SUMMARY_PROVIDER.lower()
-    if p == "openai":
-        from langchain_openai import ChatOpenAI
-        return ChatOpenAI(
-            model=settings.SUMMARY_MODEL,
-            api_key=settings.OPENAI_API_KEY or None,
-            temperature=0,
-            max_retries=2,
-        )
-    if p == "ollama":
-        from langchain_ollama import ChatOllama
-        return ChatOllama(
-            model=settings.SUMMARY_MODEL,
-            base_url=settings.OLLAMA_BASE_URL,
-            temperature=0,
-        )
-    raise ValueError(
-        f"Unknown SUMMARY_PROVIDER: {p!r} (expected: openai | ollama)"
-    )
+    """Build the summary LLM via the V1 unified initialiser."""
+    provider = settings.SUMMARY_PROVIDER.lower()
+    model_str = f"{provider}:{settings.SUMMARY_MODEL}"
+    kwargs: dict = {"temperature": 0, "max_retries": 2}
+    if provider == "ollama":
+        kwargs["base_url"] = settings.OLLAMA_BASE_URL
+        kwargs.pop("max_retries", None)  # ChatOllama doesn't accept it
+    elif provider == "openai" and settings.OPENAI_API_KEY:
+        kwargs["api_key"] = settings.OPENAI_API_KEY
+    return init_chat_model(model_str, **kwargs)
 
 
 def _build_prompt(chunk: Chunk) -> str:
