@@ -6,7 +6,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from src.routes import chat, health
+from fastapi.middleware.cors import CORSMiddleware
+
+from src.routes import chat, files, health, repos, search, sessions
 
 
 @asynccontextmanager
@@ -44,9 +46,23 @@ async def general_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+# ── CORS — frontend dev server lives on :3000, backend on :8000 ───────
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
 # ── Routes ───────────────────────────────────────────────────────────
 # Step 1: /health
 # Step 8: POST /chat (SSE)
 # Step 9: /repos, /sessions, /files, /search
 app.include_router(health.router)
 app.include_router(chat.router)
+app.include_router(repos.router)
+app.include_router(sessions.router)
+app.include_router(files.router)
+app.include_router(search.router)

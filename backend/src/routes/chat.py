@@ -79,6 +79,16 @@ async def chat(req: ChatRequest, request: Request) -> StreamingResponse:
     """
     agent = request.app.state.agent
 
+    # Record session metadata for the sidebar (created on first turn,
+    # message_count++ on subsequent ones).
+    from src.routes.sessions import upsert_session
+    from src.config import settings
+    upsert_session(
+        session_id=req.session_id,
+        repo=(req.repo or settings.REPO_NAME),
+        message=req.message,
+    )
+
     return StreamingResponse(
         _event_stream(agent, req),
         media_type="text/event-stream",
