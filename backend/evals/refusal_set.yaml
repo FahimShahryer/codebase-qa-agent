@@ -1,0 +1,32 @@
+# Out-of-scope queries — the refusal gate (rerank score < threshold) should
+# fire on all of these. Target refusal rate: 100%.
+
+- query: "How do I configure Django's MIDDLEWARE for CSRF?"
+  reason: "Django, not Flask"
+
+- query: "What's the weather forecast for Tokyo tomorrow?"
+  reason: "off-topic"
+
+- query: "How does CUDA memory allocation work in PyTorch?"
+  reason: "different ecosystem"
+
+- query: "Show me the React useState hook documentation"
+  reason: "different language/framework"
+
+- query: "What is the syntax for SQL JOIN clauses?"
+  reason: "different domain"
+
+- query: "How do I deploy a Rust binary to Kubernetes?"
+  reason: "different language + topic"
+
+- query: "Explain quantum entanglement"
+  reason: "completely unrelated"
+
+- query: "What is the best ice cream flavor?"
+  reason: "subjective + off-topic"
+
+- query: "How do I write a useEffect cleanup in React?"
+  reason: "different framework"
+
+- query: "Compare TensorFlow and JAX for training transformers"
+  reason: "ML, different ecosystem"

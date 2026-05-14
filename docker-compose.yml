@@ -52,6 +52,8 @@ services:
     volumes:
       # Hot-reload: bind-mount source over the image's /app/src
       - ./backend/src:/app/src:cached
+      # Step 10: eval scripts (hot-reload too — easy to iterate)
+      - ./backend/evals:/app/evals:cached
       # Step 2+: target repos for indexing (read-only)
       - ./repos:/app/repos:ro
       # Step 4+: persistent cache for embeddings + summaries (content-hash keyed)

@@ -1,0 +1,201 @@
+# Gold set for retrieval evaluation on Flask.
+#
+# Format:
+#   - query: natural-language input
+#     category: one of identifier_lookup | symbol_summary | conceptual |
+#               usage_example | cross_reference
+#     expected_symbols: list — a chunk counts as a hit if its symbol_path
+#                       suffix-matches OR contains any of these.
+#     k: top-k retrieved chunks to consider when computing Recall@k.
+
+# ── identifier_lookup (exact symbol queries) ─────────────────────────
+- query: "where is dispatch_request defined?"
+  category: identifier_lookup
+  expected_symbols: ["flask.app.Flask.dispatch_request"]
+  k: 5
+
+- query: "where is the Blueprint class?"
+  category: identifier_lookup
+  expected_symbols: ["flask.blueprints.Blueprint"]
+  k: 5
+
+- query: "find FlaskGroup.parse_args"
+  category: identifier_lookup
+  expected_symbols: ["flask.cli.FlaskGroup.parse_args"]
+  k: 5
+
+- query: "find the Scaffold class"
+  category: identifier_lookup
+  expected_symbols: ["flask.sansio.scaffold.Scaffold"]
+  k: 5
+
+- query: "find make_response function"
+  category: identifier_lookup
+  expected_symbols: ["flask.helpers.make_response"]
+  k: 5
+
+- query: "where is SecureCookieSession defined?"
+  category: identifier_lookup
+  expected_symbols: ["flask.sessions.SecureCookieSession"]
+  k: 5
+
+# ── symbol_summary (high-level "what is X?") ─────────────────────────
+- query: "what does the Flask class do?"
+  category: symbol_summary
+  expected_symbols: ["flask.app.Flask"]
+  k: 5
+
+- query: "what is a Blueprint in Flask?"
+  category: symbol_summary
+  expected_symbols: ["flask.blueprints.Blueprint", "flask.sansio.blueprints.Blueprint"]
+  k: 5
+
+- query: "what does send_from_directory do?"
+  category: symbol_summary
+  expected_symbols: ["flask.helpers.send_from_directory"]
+  k: 5
+
+- query: "explain url_for"
+  category: symbol_summary
+  expected_symbols: ["flask.helpers.url_for"]
+  k: 5
+
+- query: "what does FlaskGroup do?"
+  category: symbol_summary
+  expected_symbols: ["flask.cli.FlaskGroup"]
+  k: 5
+
+- query: "what is the role of dispatch_request?"
+  category: symbol_summary
+  expected_symbols: ["flask.app.Flask.dispatch_request"]
+  k: 5
+
+# ── conceptual (broad "how does X work?") ────────────────────────────
+- query: "how does Flask handle URL routing?"
+  category: conceptual
+  expected_symbols:
+    - "add_url_rule"
+    - "dispatch_request"
+    - "flask.sansio.scaffold.Scaffold"
+  k: 10
+
+- query: "how does Flask handle session management?"
+  category: conceptual
+  expected_symbols: ["flask.sessions"]
+  k: 10
+
+- query: "how does Flask serve static files?"
+  category: conceptual
+  expected_symbols:
+    - "send_from_directory"
+    - "send_file"
+    - "send_static_file"
+  k: 10
+
+- query: "how does Flask handle errors and exceptions?"
+  category: conceptual
+  expected_symbols:
+    - "errorhandler"
+    - "handle_exception"
+    - "handle_user_exception"
+  k: 10
+
+- query: "how does the Flask CLI work?"
+  category: conceptual
+  expected_symbols: ["flask.cli"]
+  k: 10
+
+- query: "how does template rendering work?"
+  category: conceptual
+  expected_symbols:
+    - "flask.templating"
+    - "render_template"
+    - "Environment"
+  k: 10
+
+# ── usage_example (how-do-I; tests/examples are valid hits) ───────────
+- query: "how do I define a route?"
+  category: usage_example
+  expected_symbols:
+    - "add_url_rule"
+    - "Scaffold.route"
+    - "@app.route"
+  k: 10
+
+- query: "how do I register a blueprint?"
+  category: usage_example
+  expected_symbols:
+    - "register_blueprint"
+    - "App.register_blueprint"
+  k: 10
+
+- query: "how do I return a JSON response?"
+  category: usage_example
+  expected_symbols:
+    - "jsonify"
+    - "JSON"
+  k: 10
+
+- query: "how do I use Flask sessions?"
+  category: usage_example
+  expected_symbols:
+    - "session"
+    - "SecureCookieSession"
+  k: 10
+
+- query: "how do I create a Flask application?"
+  category: usage_example
+  expected_symbols:
+    - "Flask.__init__"
+    - "create_app"
+    - "Flask("
+  k: 10
+
+- query: "how do I handle a 404 error?"
+  category: usage_example
+  expected_symbols:
+    - "errorhandler"
+    - "NotFound"
+  k: 10
+
+# ── cross_reference (call/import graph queries) ──────────────────────
+- query: "what calls make_response?"
+  category: cross_reference
+  expected_symbols:
+    - "finalize_request"
+    - "make_response"
+  k: 10
+
+- query: "what calls dispatch_request?"
+  category: cross_reference
+  expected_symbols:
+    - "full_dispatch_request"
+    - "dispatch_request"
+  k: 10
+
+- query: "which files import werkzeug?"
+  category: cross_reference
+  expected_symbols:
+    - "flask.app"
+    - "flask.helpers"
+    - "flask.wrappers"
+  k: 10
+
+- query: "what calls url_for?"
+  category: cross_reference
+  expected_symbols: ["url_for"]
+  k: 10
+
+- query: "what depends on flask.sessions?"
+  category: cross_reference
+  expected_symbols:
+    - "flask.app"
+    - "flask"
+  k: 10
+
+- query: "what calls finalize_request?"
+  category: cross_reference
+  expected_symbols:
+    - "full_dispatch_request"
+    - "finalize_request"
+  k: 10
